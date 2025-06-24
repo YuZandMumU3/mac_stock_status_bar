@@ -1,10 +1,11 @@
 # macOS 股票监控状态栏应用
 
-一个简洁高效的 macOS 状态栏应用，实时监控A股股票价格，支持颜色指示器和多种显示模式。
+一个简洁高效的 macOS 状态栏应用，实时监控A股股票价格，支持颜色指示器、趋势图表和多种显示模式。
 
 ## ✨ 主要功能
 
 - 🎯 **实时股票数据** - A股价格和涨跌幅实时更新
+- 📊 **趋势图表** - 透明背景股票走势图，高质量显示
 - 🎨 **颜色指示器** - 直观显示涨跌状态
   - 🔴📈 上涨：红色圆圈 + 上升图标
   - 🟢📉 下跌：绿色圆圈 + 下降图标  
@@ -35,6 +36,27 @@ python3 status_bar_app.py
 或使用启动脚本：
 ```bash
 ./launch_app.sh
+```
+
+## 📊 趋势图表功能
+
+### 图表特性
+- **透明背景** - 完美融入系统状态栏
+- **高质量渲染** - 160 DPI高清显示
+- **智能缓存** - 自动管理图表文件
+- **多种生成方式** - 支持Matplotlib和PIL
+
+### 图表配置
+```json
+{
+  "chart_settings": {
+    "enabled": true,
+    "width": 180,
+    "height": 45,
+    "cache_hours": 12,
+    "max_cache_files": 30
+  }
+}
 ```
 
 ## 🎨 颜色功能
@@ -80,6 +102,11 @@ python3 tools/config_gui.py
     "use_color_indicators": true,
     "rotate_stocks": true,
     "rotate_interval": 10
+  },
+  "chart_settings": {
+    "enabled": true,
+    "width": 180,
+    "height": 45
   }
 }
 ```
@@ -115,26 +142,51 @@ python3 tools/config_gui.py
 1. 通过状态栏菜单"重新加载配置"
 2. 或重启应用
 
+### 图表不显示？
+1. 确认已安装图表依赖：`pip install matplotlib pillow`
+2. 检查缓存目录权限
+3. 查看日志获取详细错误信息
+
 ## 📁 项目结构
 
 ```
-mac_status_bar/
-├── status_bar_app.py          # 应用入口
-├── configure.py               # 配置入口
-├── config.json               # 配置文件
-├── tools/                    # 配置工具
-│   ├── quick_config.py       # 快捷配置
-│   ├── config_gui.py         # 图形配置
-│   └── config.py             # 配置查看
-├── data_providers/           # 数据提供者
-│   ├── stock_provider.py     # 股票数据
+stock_status_bar/
+├── status_bar_app.py              # 应用入口
+├── configure.py                   # 配置入口
+├── config.json                   # 配置文件
+├── cache/                        # 缓存目录
+│   ├── charts/                   # 趋势图表缓存
+│   └── stock_cache.pkl          # 股票数据缓存
+├── tools/                        # 配置工具
+│   ├── quick_config.py          # 快捷配置
+│   ├── config_gui.py            # 图形配置
+│   └── config.py                # 配置查看
+├── data_providers/              # 数据提供者
+│   ├── stock_provider.py        # 股票数据
+│   ├── chart_generator.py       # 图表生成
 │   └── ...
-├── ui/                       # 用户界面
-│   └── status_bar_ui.py      # 状态栏UI
-└── utils/                    # 工具类
-    ├── icon_manager.py       # 图标管理
-    └── thread_manager.py     # 线程管理
+├── ui/                          # 用户界面
+│   └── status_bar_ui.py         # 状态栏UI
+└── utils/                       # 工具类
+    ├── icon_manager.py          # 图标管理
+    └── thread_manager.py        # 线程管理
 ```
+
+## 🏗️ 技术架构
+
+### 核心组件
+- **应用入口** - 应用主程序
+- **控制器** - 业务逻辑控制
+- **配置管理** - 配置文件管理，支持热重载
+- **数据提供者** - 多种数据获取方式
+- **图表生成器** - 高质量趋势图表
+- **用户界面** - 状态栏界面管理
+
+### 设计模式
+- **工厂模式** - 数据提供者创建
+- **观察者模式** - 配置变更通知
+- **单例模式** - 线程管理器
+- **策略模式** - 不同数据源处理
 
 ## 📄 许可证
 

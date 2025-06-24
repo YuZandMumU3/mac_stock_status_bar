@@ -21,11 +21,27 @@ wheels/
 *.so
 MANIFEST
 
+# 项目特定文件
 # 生成的图标文件
 status_icon.png
 
 # 配置文件（可能包含个人API密钥）
 config.json
+
+# 日志文件
+*.log
+app.log
+
+# 缓存目录和文件
+cache/
+*.pkl
+*.cache
+
+# 临时文件和预览图片
+chart_preview.png
+chart_enlarged.png
+temp_*.png
+test_*.py
 
 # IDE文件
 .idea/
@@ -39,3 +55,12 @@ config.json
 venv/
 env/
 ENV/
+
+# macOS系统文件
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# 临时调试文件
+debug_*.py
+temp_*.py

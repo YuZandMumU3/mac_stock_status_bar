@@ -150,7 +150,7 @@ class ConfigManager:
         """
         return {
             "update_interval": 5,  # 更新为5秒
-            "display_format": "{colored_display}",
+            "display_format": "{display_with_trend}",
             "time_format": "%H:%M:%S",
             "date_format": "%Y-%m-%d",
             "custom_info": {
@@ -184,7 +184,11 @@ class ConfigManager:
                 "rotate_interval": 10,
                 "show_index": True,
                 "index_code": "000001",
-                "use_color_indicators": True
+                "use_color_indicators": True,
+                "show_trend_chart": True,
+                "trend_period_hours": 3,
+    
+                "use_image_chart": True
             }
         }
     

@@ -110,6 +110,36 @@ class StatusBarUI:
                     self.app.title = custom_text
                     return
             
+            # 检查是否有图片走势图
+            if info.get("has_chart_image", False) and info.get("chart_image_path"):
+                chart_path = info.get("chart_image_path")
+                if os.path.exists(chart_path):
+                    try:
+                        # 直接使用图片路径作为状态栏图标
+                        self.app.icon = chart_path
+                        
+                        # 设置简化的文字显示
+                        stock_name = info.get("stock_name", "")
+                        stock_price = info.get("stock_price", "")
+                        change_percent = info.get("colored_change_percent", "")
+                        
+                        if stock_name and stock_price:
+                            self.app.title = f"{stock_name} {stock_price} {change_percent}"
+                        else:
+                            # 格式化显示内容
+                            display_format = self.config_manager.get_value("display_format", "")
+                            display_text = display_format.format(**info)
+                            self.app.title = display_text
+                        return
+                    except Exception as e:
+                        print(f"设置图片图标失败: {e}")
+            
+            # 恢复默认图标
+            from utils.icon_manager import IconManager
+            default_icon = IconManager.get_app_icon()
+            if self.app.icon != default_icon:
+                self.app.icon = default_icon
+            
             # 格式化显示内容
             display_format = self.config_manager.get_value("display_format", "")
             try:

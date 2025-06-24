@@ -106,24 +106,15 @@ def run_daemon():
     current_dir = Path(__file__).parent.absolute()
     log_file = current_dir / "app.log"
     
-    # 在后台运行时，重定向输出
-    if os.fork() == 0:  # 子进程
-        # 关闭标准文件描述符
-        os.close(0)
-        os.close(1)
-        os.close(2)
-        
-        # 重定向到日志文件
-        log_fd = os.open(str(log_file), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-        os.dup2(log_fd, 1)
-        os.dup2(log_fd, 2)
-        
-        # 启动应用
-        setup_environment()
-        from status_bar_controller import main
-        main()
-    else:  # 父进程
-        print(f"✅ 应用程序已在后台启动，日志文件: {log_file}")
+    # 重定向输出到日志文件
+    import sys
+    sys.stdout = open(log_file, 'a', encoding='utf-8')
+    sys.stderr = sys.stdout
+    
+    # 启动应用
+    setup_environment()
+    from status_bar_controller import main
+    main()
 
 def check_status():
     """检查应用程序运行状态"""

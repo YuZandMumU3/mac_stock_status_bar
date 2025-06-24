@@ -23,7 +23,7 @@ fi
 
 # 在后台启动应用程序
 echo "📊 启动股票监控应用..."
-nohup python3 "$SCRIPT_DIR/status_bar_app.py" --daemon > /dev/null 2>&1 &
+nohup python3 "$SCRIPT_DIR/status_bar_app.py" --daemon >> "$SCRIPT_DIR/app.log" 2>&1 &
 
 echo "✅ 应用程序已在后台启动"
 echo "💡 使用以下命令停止应用："

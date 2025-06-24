@@ -4,7 +4,8 @@
 import time
 import os
 import pickle
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
+from datetime import datetime
 import threading
 from functools import wraps
 
@@ -34,6 +35,16 @@ class StockDataProvider:
         # 导入thread_manager
         from utils.thread_manager import ThreadManager
         self.thread_manager = ThreadManager()
+        
+        # 导入图表生成器
+        try:
+            from data_providers.chart_generator import ChartGenerator
+            self.chart_generator = ChartGenerator()
+            self.chart_enabled = True
+        except Exception as e:
+            print(f"图表生成器初始化失败: {e}")
+            self.chart_generator = None
+            self.chart_enabled = False
         
         # 持久化缓存路径
         self.cache_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache")
@@ -138,8 +149,12 @@ class StockDataProvider:
                 self.current_stock_index = (self.current_stock_index + 1) % len(a_stock_symbols)
                 self.rotate_counter = 0
         
-        # 保存颜色设置以供格式化方法使用
+        # 保存显示设置以供格式化方法使用
         self.use_color_indicators = stock_info.get("use_color_indicators", True)
+        self.show_trend_chart = stock_info.get("show_trend_chart", True)
+        self.trend_period_hours = stock_info.get("trend_period_hours", 3)
+
+        self.use_image_chart = stock_info.get("use_image_chart", True)
         
         # 显示多只股票或单只股票
         if stock_info.get("show_multiple", False):
@@ -194,7 +209,7 @@ class StockDataProvider:
     
     def _format_stock_data_with_color(self, stock_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        为股票数据添加颜色指示，并返回带颜色的格式化数据
+        为股票数据添加颜色指示和走势图，并返回带颜色的格式化数据
         
         Args:
             stock_data: 原始股票数据
@@ -238,6 +253,55 @@ class StockDataProvider:
             colored_data["colored_change"] = f"{stock_data.get('change', '')}"
             colored_data["colored_change_percent"] = f"{change_percent}"
             
+        # 获取走势图数据（根据配置决定是否启用）
+        show_trend = getattr(self, 'show_trend_chart', True)
+        use_image_chart = getattr(self, 'use_image_chart', True)  # 新增：是否使用图片走势图
+        
+        if show_trend:
+            symbol_code = stock_data.get("symbol", "").split("(")[1].replace(")", "") if "(" in stock_data.get("symbol", "") else ""
+            if symbol_code and len(symbol_code) == 6 and symbol_code.isdigit():
+                # 获取指定时间内的分钟数据
+                period_hours = getattr(self, 'trend_period_hours', 3)
+
+                
+                minute_data = self.get_minute_data(symbol_code, period_hours)
+                if minute_data and len(minute_data) == 2:
+                    minute_prices, timestamps = minute_data
+                    
+                    # 根据配置选择生成ASCII或图片走势图
+                    if use_image_chart and self.chart_enabled and self.chart_generator:
+                        # 生成图片走势图
+                        try:
+                            current_price = float(stock_data.get("price", 0))
+                            change_percent_str = stock_data.get("change_percent", "0%")
+                            change_percent = float(change_percent_str.replace("%", ""))
+                            
+                            chart_path = self.chart_generator.generate_chart_image(
+                                symbol_code, minute_prices, timestamps, current_price, change_percent
+                            )
+                            
+                            if chart_path:
+                                colored_data["chart_image_path"] = chart_path
+                                colored_data["has_chart_image"] = True
+                                # 清理旧图表
+                                self.chart_generator.cleanup_old_charts()
+                            else:
+                                colored_data["has_chart_image"] = False
+                        except Exception as e:
+                            print(f"生成图片走势图失败: {e}")
+                            colored_data["has_chart_image"] = False
+                    
+                    # 只使用图片走势图，不使用字符图表
+                else:
+                    # 数据获取失败时，不显示字符图表
+                    colored_data["has_chart_image"] = False
+            else:
+                # 无效股票代码时，不显示图表
+                colored_data["has_chart_image"] = False
+        else:
+            # 未启用走势图时，不显示图表
+            colored_data["has_chart_image"] = False
+        
         # 创建完整的带颜色显示文本
         prefix = f"{color_indicator} " if use_color and color_indicator else ""
         colored_data["colored_display"] = f"{prefix}{colored_data.get('stock_name', '')} {colored_data.get('stock_price', '')} ({colored_data.get('colored_change_percent', '').strip()})"
@@ -587,4 +651,102 @@ class StockDataProvider:
                 del self.cache[key]
             if key in self.cache_time:
                 del self.cache_time[key]
+
+    def get_minute_data(self, symbol: str, period_hours: int = 3) -> Optional[Tuple[List[float], List[datetime]]]:
+        """
+        获取股票分钟级数据
+        
+        Args:
+            symbol: 股票代码
+            period_hours: 获取多少小时的数据
+            
+        Returns:
+            (价格列表, 时间戳列表) 元组，用于生成走势图
+        """
+        if not self.api_available:
+            return None
+            
+        cache_key = f"minute_data_{symbol}_{period_hours}h"
+        cached_data = self.get_from_cache(cache_key)
+        if cached_data:
+            return cached_data
+            
+        try:
+            from datetime import datetime, timedelta
+            
+            # 使用akshare获取实时分钟级数据
+            # 先尝试获取实时分钟数据（如果可用）
+            try:
+                # 尝试获取今日分钟数据
+                df = self.ak.stock_zh_a_minute(symbol=symbol, period='1', adjust='')
+                if df is not None and not df.empty:
+                    # 获取最近N小时的数据点
+                    recent_data = df.tail(period_hours * 60)
+                    prices = recent_data['close'].tolist()
+                    
+                    # 生成对应的时间戳
+                    now = datetime.now()
+                    timestamps = [now - timedelta(minutes=i) for i in range(len(prices)-1, -1, -1)]
+                    
+                    # 缓存数据（1分钟缓存，更频繁更新）
+                    result = (prices, timestamps)
+                    self.cache[cache_key] = result
+                    self.cache_time[cache_key] = time.time()
+                    return result
+            except:
+                pass
+            
+            # 如果分钟数据不可用，使用日线数据模拟
+            df = self.ak.stock_zh_a_hist(
+                symbol=symbol, 
+                period="daily", 
+                adjust=""
+            )
+            
+            if df is None or df.empty:
+                return None
+                
+            # 获取最近几天的数据来模拟分钟走势
+            recent_data = df.tail(period_hours * 2)  # 获取更多天数的数据
+            
+            # 使用收盘价、最高价、最低价来模拟分钟级波动
+            prices = []
+            timestamps = []
+            now = datetime.now()
+            
+            time_offset = 0
+            for _, row in recent_data.iterrows():
+                open_price = row.get('开盘', row.get('收盘', 0))
+                high_price = row.get('最高', row.get('收盘', 0))
+                low_price = row.get('最低', row.get('收盘', 0))
+                close_price = row.get('收盘', 0)
+                
+                # 模拟一天内的价格变化
+                day_prices = [open_price, high_price, low_price, close_price]
+                prices.extend(day_prices)
+                
+                # 生成对应的时间戳
+                for i in range(4):
+                    timestamps.append(now - timedelta(minutes=time_offset + i * 120))
+                time_offset += 480  # 一天按8小时计算
+            
+            # 限制数据点数量
+            if len(prices) > period_hours * 20:
+                prices = prices[-(period_hours * 20):]
+                timestamps = timestamps[-(period_hours * 20):]
+            
+            # 缓存数据（5分钟缓存）
+            result = (prices, timestamps)
+            self.cache[cache_key] = result
+            self.cache_time[cache_key] = time.time()
+            
+            return result
+            
+        except Exception as e:
+            print(f"获取分钟数据失败 {symbol}: {e}")
+            return None
+    
+
+    
+
 
